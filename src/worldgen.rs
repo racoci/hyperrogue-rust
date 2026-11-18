@@ -5,7 +5,6 @@
 
 use crate::content::*;
 use crate::tiling::*;
-use rand_core::RngCore;
 use rand_mt::Mt19937GenRand32;
 
 /// Mersenne Twister PRNG matching C++ std::mt19937 in HyperRogue
@@ -99,7 +98,7 @@ impl World {
         world
     }
 
-    fn ensure_board_capacity(&mut self, count: usize) {
+    pub fn ensure_board_capacity(&mut self, count: usize) {
         while self.board.len() < count {
             let id = self.board.len();
             self.board.push(BoardCell::new(id));
