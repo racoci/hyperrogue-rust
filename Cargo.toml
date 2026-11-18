@@ -1,0 +1,13 @@
+[package]
+name = "hyperrogue-rs"
+version = "0.1.0"
+edition = "2021"
+authors = ["Lucas Racoci <racoci.0@gmail.com>"]
+description = "Recreation of HyperRogue in Rust"
+
+[dependencies]
+# Mersenne Twister for exact bit-for-bit RNG match with C++ std::mt19937
+rand_mt = "4.2"
+rand_core = "0.6"
+
+[dev-dependencies]
