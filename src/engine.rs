@@ -337,6 +337,8 @@ impl GameEngine {
         // Monster turn: move enemies towards player
         self.monsters_turn();
 
+        // Environmental update: Living Caves CA, heat, fire, ivy, worms
+        crate::sim::EnvironmentSim::step_environment(&mut self.world, player_c, self.gamerange);
         // Reduce active orb charges if needed
         self.decay_orbs();
     }
