@@ -215,7 +215,7 @@ impl Tiling {
 
     fn add_spin(&mut self, h: usize, d: usize, from: usize, rot: i32, spin_offset: i32) {
         let rot_fixed = ((rot % 7 + 7) % 7) as usize;
-        let h1 = self.create_step(from, rot_fixed);
+        let _h1 = self.create_step(from, rot_fixed);
         let from_spin = self.hepts[from].spins[rot_fixed] as i32;
         let fr = (((from_spin + spin_offset) % 7 + 7) % 7) as usize;
         let target = self.hepts[from].moves[rot_fixed].unwrap();
