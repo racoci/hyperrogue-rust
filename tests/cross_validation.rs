@@ -1,12 +1,9 @@
 //! Comprehensive Integration Tests and Cross-Validation against Original C++ HyperRogue
 
-use hyperrogue_rs::content::*;
 use hyperrogue_rs::engine::*;
-use hyperrogue_rs::math::*;
 use hyperrogue_rs::render::*;
-use hyperrogue_rs::sim::*;
+use hyperrogue_rs::math::*;
 use hyperrogue_rs::tiling::*;
-use hyperrogue_rs::worldgen::*;
 use std::collections::{HashMap, VecDeque};
 use std::f64::consts::PI;
 

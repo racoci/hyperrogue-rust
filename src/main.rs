@@ -40,6 +40,30 @@ fn main() {
             "--nil" => {
                 run_nil = true;
             }
+            "--nil-penrose" => {
+                let path = if i + 1 < args.len() && !args[i + 1].starts_with("--") {
+                    i += 1;
+                    args[i].clone()
+                } else {
+                    "nil_penrose.svg".to_string()
+                };
+                let tribar = hyperrogue_rs::nil::PenroseTribar::new(4.0, 0.35);
+                fs::write(&path, tribar.to_svg(600)).expect("Failed to write Penrose SVG");
+                println!("Nil Penrose Impossible Triangle saved to {}", path);
+                return;
+            }
+            "--nil-staircase" => {
+                let path = if i + 1 < args.len() && !args[i + 1].starts_with("--") {
+                    i += 1;
+                    args[i].clone()
+                } else {
+                    "nil_staircase.svg".to_string()
+                };
+                let stair = hyperrogue_rs::nil::NilStaircase::new(4.0, 4);
+                fs::write(&path, stair.to_svg(600)).expect("Failed to write Staircase SVG");
+                println!("Nil Ascending Staircase saved to {}", path);
+                return;
+            }
             _ => {}
         }
         i += 1;

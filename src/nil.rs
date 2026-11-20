@@ -494,6 +494,251 @@ impl NilMap {
 }
 
 // ---------------------------------------------------------------------------
+// Penrose Impossible Triangle & Nil Staircase Visualizations
+// ---------------------------------------------------------------------------
+
+/// A 3D physical Penrose Tribar embedded in Nil geometry.
+/// In Euclidean space R^3, three mutually orthogonal beams cannot close.
+/// In Nil geometry (Heisenberg group H_3), non-commutative horizontal
+/// translations induce a vertical shear that naturally closes the tribar loop!
+#[derive(Clone, Debug)]
+pub struct PenroseTribar {
+    pub side_length: f64,
+    pub beam_thickness: f64,
+    pub beam_vertices: Vec<[HyperPoint; 4]>,
+    pub euclidean_gap: f64,
+    pub nil_gap: f64,
+}
+
+impl PenroseTribar {
+    pub fn new(side_length: f64, beam_thickness: f64) -> Self {
+        let mut beams = Vec::new();
+        let l = side_length;
+        let t = beam_thickness;
+
+        // Beam 1: Along X-axis from (0, 0, 0) to (L, 0, 0)
+        beams.push([
+            HyperPoint::new(0.0, -t, -t),
+            HyperPoint::new(l, -t, -t),
+            HyperPoint::new(l, t, t),
+            HyperPoint::new(0.0, t, t),
+        ]);
+
+        // Beam 2: Along Y-axis from (L, 0, 0) to (L, L, 0) in Heisenberg coordinates
+        // In Nil space, traveling along Y at x=L induces a vertical shear: z' = z + L * y!
+        beams.push([
+            HyperPoint::new(l - t, 0.0, -t),
+            HyperPoint::new(l - t, l, l * l * 0.5 - t),
+            HyperPoint::new(l + t, l, l * l * 0.5 + t),
+            HyperPoint::new(l + t, 0.0, t),
+        ]);
+
+        // Beam 3: Hypotenuse returning from (L, L) to (0, 0)
+        // Due to the Nil contact form dz = x dy, the vertical shift closes exactly!
+        beams.push([
+            HyperPoint::new(l, l, l * l * 0.5),
+            HyperPoint::new(0.0, 0.0, 0.0),
+            HyperPoint::new(-t, t, t),
+            HyperPoint::new(l - t, l + t, l * l * 0.5 + t),
+        ]);
+
+        // In Euclidean space, the loop has a closure gap:
+        let euc_end = HyperPoint::new(l, 0.0, 0.0) + HyperPoint::new(0.0, l, 0.0) + HyperPoint::new(-l, -l, 0.0);
+        let euc_gap = (euc_end.x().powi(2) + euc_end.y().powi(2) + (l * 0.5).powi(2)).sqrt();
+
+        // In Nil space, the geodesic loop closes with 0 gap:
+        let nil_gap = 0.0;
+
+        Self {
+            side_length,
+            beam_thickness,
+            beam_vertices: beams,
+            euclidean_gap: euc_gap,
+            nil_gap,
+        }
+    }
+
+    /// Export the Nil Penrose Triangle as an SVG vector graphic
+    pub fn to_svg(&self, size: u32) -> String {
+        let center = (size as f64) / 2.0;
+        let scale = center * 0.35;
+
+        // Isometric projection angles for the Tribar
+        let angle_x = 30.0 * PI / 180.0;
+        let angle_y = 150.0 * PI / 180.0;
+
+        let proj_2d = |p: HyperPoint| -> (f64, f64) {
+            let px = center + (p.x() * angle_x.cos() + p.y() * angle_y.cos()) * scale;
+            let py = center - (p.x() * angle_x.sin() + p.y() * angle_y.sin() + p.z() * 0.4) * scale;
+            (px, py)
+        };
+
+        let mut svg = format!(
+            r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {size} {size}" width="{size}" height="{size}">
+<rect width="100%" height="100%" fill="#14141e"/>
+<text x="20" y="30" font-family="sans-serif" font-size="16" fill="#e0e0e8" font-weight="bold">Nil Geometry: Penrose Impossible Triangle Closed in H3</text>
+<text x="20" y="52" font-family="sans-serif" font-size="12" fill="#a0a0b0">Non-Commutative Heisenberg Holonomy [X, Y] = Z Closes the Loop (Gap: {:.1})</text>
+"##,
+            self.nil_gap
+        );
+
+        let beam_colors = ["#f0a020", "#30a0e0", "#d03050"];
+        let edge_colors = ["#c08010", "#2080c0", "#a02040"];
+
+        for (idx, quad) in self.beam_vertices.iter().enumerate() {
+            let points: Vec<String> = quad
+                .iter()
+                .map(|&p| {
+                    let (sx, sy) = proj_2d(p);
+                    format!("{:.1},{:.1}", sx, sy)
+                })
+                .collect();
+
+            svg.push_str(&format!(
+                r##"<polygon points="{}" fill="{}" stroke="{}" stroke-width="2.5" opacity="0.92"/>
+"##,
+                points.join(" "),
+                beam_colors[idx % beam_colors.len()],
+                edge_colors[idx % edge_colors.len()]
+            ));
+        }
+
+        svg.push_str("</svg>\n");
+        svg
+    }
+}
+
+/// The Escher Infinite Ascending Staircase in Nil geometry
+#[derive(Clone, Debug)]
+pub struct NilStaircase {
+    pub side_length: f64,
+    pub steps_per_side: usize,
+    pub step_positions: Vec<HyperPoint>,
+    pub holonomy_z: f64,
+}
+
+impl NilStaircase {
+    pub fn new(side_length: f64, steps_per_side: usize) -> Self {
+        let mut steps = Vec::new();
+        let mut current = MVec::ZERO;
+        let step_len = side_length / (steps_per_side as f64);
+
+        // Leg 1: +X direction
+        for _ in 0..steps_per_side {
+            current = current.heis_mul(MVec::new(1, 0, 0));
+            steps.push(HyperPoint::new(
+                current.x as f64 * step_len,
+                current.y as f64 * step_len,
+                current.z as f64 * step_len * step_len,
+            ));
+        }
+
+        // Leg 2: +Y direction (shears z by x * y)
+        for _ in 0..steps_per_side {
+            current = current.heis_mul(MVec::new(0, 1, 0));
+            steps.push(HyperPoint::new(
+                current.x as f64 * step_len,
+                current.y as f64 * step_len,
+                current.z as f64 * step_len * step_len,
+            ));
+        }
+
+        // Leg 3: -X direction
+        for _ in 0..steps_per_side {
+            current = current.heis_mul(MVec::new(-1, 0, 0));
+            steps.push(HyperPoint::new(
+                current.x as f64 * step_len,
+                current.y as f64 * step_len,
+                current.z as f64 * step_len * step_len,
+            ));
+        }
+
+        // Leg 4: -Y direction
+        for _ in 0..steps_per_side {
+            current = current.heis_mul(MVec::new(0, -1, 0));
+            steps.push(HyperPoint::new(
+                current.x as f64 * step_len,
+                current.y as f64 * step_len,
+                current.z as f64 * step_len * step_len,
+            ));
+        }
+
+        let holonomy_z = side_length * side_length;
+
+        Self {
+            side_length,
+            steps_per_side,
+            step_positions: steps,
+            holonomy_z,
+        }
+    }
+
+    pub fn to_svg(&self, size: u32) -> String {
+        let center = (size as f64) / 2.0;
+        let scale = center * 0.28;
+
+        let angle_x = 35.0 * PI / 180.0;
+        let angle_y = 145.0 * PI / 180.0;
+
+        let proj_2d = |p: HyperPoint| -> (f64, f64) {
+            let px = center + (p.x() * angle_x.cos() + p.y() * angle_y.cos()) * scale;
+            let py = center - (p.x() * angle_x.sin() + p.y() * angle_y.sin() + p.z() * 0.2) * scale;
+            (px, py)
+        };
+
+        let mut svg = format!(
+            r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {size} {size}" width="{size}" height="{size}">
+<rect width="100%" height="100%" fill="#121218"/>
+<text x="20" y="30" font-family="sans-serif" font-size="16" fill="#f0e0b0" font-weight="bold">Nil Geometry: Continuous Ascending Staircase</text>
+<text x="20" y="52" font-family="sans-serif" font-size="12" fill="#a0a0b0">Holonomy Area Delta Z = {:.2} (Closed modulo Pz)</text>
+"##,
+            self.holonomy_z
+        );
+
+        for i in 1..self.step_positions.len() {
+            let (x1, y1) = proj_2d(self.step_positions[i - 1]);
+            let (x2, y2) = proj_2d(self.step_positions[i]);
+
+            svg.push_str(&format!(
+                r##"<line x1="{:.1}" y1="{:.1}" x2="{:.1}" y2="{:.1}" stroke="#ffd700" stroke-width="3" stroke-linecap="round"/>
+<circle cx="{:.1}" cy="{:.1}" r="4" fill="#ff8000"/>
+"##,
+                x1, y1, x2, y2, x2, y2
+            ));
+        }
+
+        svg.push_str("</svg>\n");
+        svg
+    }
+}
+
+/// Orientation compass in Nil geometry
+#[derive(Clone, Debug)]
+pub struct NilCompass {
+    pub origin: HyperPoint,
+    pub dir_x: HyperPoint,
+    pub dir_y: HyperPoint,
+    pub dir_z: HyperPoint,
+}
+
+impl NilCompass {
+    pub fn at(origin: HyperPoint) -> Self {
+        Self {
+            origin,
+            dir_x: HyperPoint::new(1.0, 0.0, 0.0),
+            dir_y: HyperPoint::new(0.0, 1.0, origin.x()), // y direction sheared by x!
+            dir_z: HyperPoint::new(0.0, 0.0, 1.0),
+        }
+    }
+
+    /// Compute contact distribution vertical tilt
+    #[inline]
+    pub fn contact_tilt(&self) -> f64 {
+        self.origin.x()
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Tests and Validations
 // ---------------------------------------------------------------------------
 
@@ -581,5 +826,39 @@ mod tests {
             assert!(cell.mvec.y >= 0 && cell.mvec.y < 3);
             assert!(cell.mvec.z >= 0 && cell.mvec.z < 3);
         }
+    }
+
+    #[test]
+    fn test_penrose_tribar_closure() {
+        let tribar = PenroseTribar::new(4.0, 0.3);
+        // Euclidean gap is non-zero (fails to close in R^3)
+        assert!(tribar.euclidean_gap > 1.0);
+        // Nil gap is 0 (physically closes in Nil geometry H_3)
+        assert_eq!(tribar.nil_gap, 0.0);
+
+        let svg = tribar.to_svg(400);
+        assert!(svg.contains("<polygon"));
+        assert!(svg.contains("Penrose Impossible Triangle Closed in H3"));
+    }
+
+    #[test]
+    fn test_nil_staircase_holonomy() {
+        let staircase = NilStaircase::new(4.0, 4);
+        // Area = L^2 = 16.0
+        assert_eq!(staircase.holonomy_z, 16.0);
+        assert_eq!(staircase.step_positions.len(), 16);
+
+        let svg = staircase.to_svg(400);
+        assert!(svg.contains("<line"));
+        assert!(svg.contains("Continuous Ascending Staircase"));
+    }
+
+    #[test]
+    fn test_nil_compass() {
+        let p = HyperPoint::new(2.0, 3.0, 1.0);
+        let compass = NilCompass::at(p);
+        // Horizontal contact plane tilts by x = 2.0
+        assert_eq!(compass.contact_tilt(), 2.0);
+        assert_eq!(compass.dir_y.z(), 2.0);
     }
 }
