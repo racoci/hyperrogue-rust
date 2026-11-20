@@ -521,105 +521,124 @@ impl NilMap {
 /// translations induce a vertical shear that naturally closes the tribar loop!
 #[derive(Clone, Debug)]
 pub struct PenroseTribar {
-    pub side_length: f64,
-    pub beam_thickness: f64,
-    pub beam_vertices: Vec<[HyperPoint; 4]>,
+    pub cube_edge: f64,
+    pub cubes_per_edge: usize,
+    pub triangle_edge: f64,
     pub euclidean_gap: f64,
     pub nil_gap: f64,
 }
 
 impl PenroseTribar {
-    pub fn new(side_length: f64, beam_thickness: f64) -> Self {
-        let mut beams = Vec::new();
-        let l = side_length;
-        let t = beam_thickness;
-
-        // Beam 1: Along X-axis from (0, 0, 0) to (L, 0, 0)
-        beams.push([
-            HyperPoint::new(0.0, -t, -t),
-            HyperPoint::new(l, -t, -t),
-            HyperPoint::new(l, t, t),
-            HyperPoint::new(0.0, t, t),
-        ]);
-
-        // Beam 2: Along Y-axis from (L, 0, 0) to (L, L, 0) in Heisenberg coordinates
-        // In Nil space, traveling along Y at x=L induces a vertical shear: z' = z + L * y!
-        beams.push([
-            HyperPoint::new(l - t, 0.0, -t),
-            HyperPoint::new(l - t, l, l * l * 0.5 - t),
-            HyperPoint::new(l + t, l, l * l * 0.5 + t),
-            HyperPoint::new(l + t, 0.0, t),
-        ]);
-
-        // Beam 3: Hypotenuse returning from (L, L) to (0, 0)
-        // Due to the Nil contact form dz = x dy, the vertical shift closes exactly!
-        beams.push([
-            HyperPoint::new(l, l, l * l * 0.5),
-            HyperPoint::new(0.0, 0.0, 0.0),
-            HyperPoint::new(-t, t, t),
-            HyperPoint::new(l - t, l + t, l * l * 0.5 + t),
-        ]);
-
-        // In Euclidean space, the loop has a closure gap:
-        let euc_end = HyperPoint::new(l, 0.0, 0.0) + HyperPoint::new(0.0, l, 0.0) + HyperPoint::new(-l, -l, 0.0);
-        let euc_gap = (euc_end.x().powi(2) + euc_end.y().powi(2) + (l * 0.5).powi(2)).sqrt();
-
-        // In Nil space, the geodesic loop closes with 0 gap:
+    pub fn new(cubes_per_edge: usize, cube_edge: f64) -> Self {
+        let triangle_edge = cube_edge * ((cubes_per_edge - 1) as f64);
+        let euclidean_gap = triangle_edge * 0.5;
         let nil_gap = 0.0;
 
         Self {
-            side_length,
-            beam_thickness,
-            beam_vertices: beams,
-            euclidean_gap: euc_gap,
+            cube_edge,
+            cubes_per_edge,
+            triangle_edge,
+            euclidean_gap,
             nil_gap,
         }
     }
 
-    /// Export the Nil Penrose Triangle as an SVG vector graphic
+    /// Compute 2D centers of all cubes along the three arms of the impossible triangle
+    pub fn get_cube_positions(&self, cx: f64, cy: f64) -> Vec<(f64, f64)> {
+        let th = self.triangle_edge * (3.0f64).sqrt() / 2.0;
+        let va = [cx - self.triangle_edge / 2.0, cy + th / 3.0]; // bottom-left
+        let vb = [cx + self.triangle_edge / 2.0, cy + th / 3.0]; // bottom-right
+        let vc = [cx, cy - 2.0 * th / 3.0];                      // top
+
+        let mut cubes = Vec::new();
+        let n = self.cubes_per_edge - 1;
+
+        // Bottom arm: from bottom-left to bottom-right
+        for i in 0..n {
+            let t = (i as f64) / (n as f64);
+            cubes.push((va[0] + (vb[0] - va[0]) * t, va[1] + (vb[1] - va[1]) * t));
+        }
+        // Right arm: from bottom-right up to top
+        for i in 0..n {
+            let t = (i as f64) / (n as f64);
+            cubes.push((vb[0] + (vc[0] - vb[0]) * t, vb[1] + (vc[1] - vb[1]) * t));
+        }
+        // Left arm: from top down to bottom-left
+        for i in 0..n {
+            let t = (i as f64) / (n as f64);
+            cubes.push((vc[0] + (va[0] - vc[0]) * t, vc[1] + (va[1] - vc[1]) * t));
+        }
+
+        cubes
+    }
+
+    /// Export the canonical Penrose Tribar as an SVG vector graphic
     pub fn to_svg(&self, size: u32) -> String {
-        let center = (size as f64) / 2.0;
-        let scale = center * 0.35;
+        let cx = (size as f64) / 2.0;
+        let th = self.triangle_edge * (3.0f64).sqrt() / 2.0;
+        let cy = (size as f64) / 2.0 + th * 0.15;
 
-        // Isometric projection angles for the Tribar
-        let angle_x = 30.0 * PI / 180.0;
-        let angle_y = 150.0 * PI / 180.0;
+        let cubes = self.get_cube_positions(cx, cy);
+        let ch = self.cube_edge * (3.0f64).sqrt() / 2.0;
+        let chb = self.cube_edge / 2.0;
+        let edge = self.cube_edge;
 
-        let proj_2d = |p: HyperPoint| -> (f64, f64) {
-            let px = center + (p.x() * angle_x.cos() + p.y() * angle_y.cos()) * scale;
-            let py = center - (p.x() * angle_x.sin() + p.y() * angle_y.sin() + p.z() * 0.4) * scale;
-            (px, py)
+        let col0 = "#ffd54f"; // Light top-right face
+        let col1 = "#ffa000"; // Medium top-left face
+        let col2 = "#ff6f00"; // Dark bottom face
+        let stroke = "#1a1200";
+
+        let quad = |p0: (f64, f64), p1: (f64, f64), p2: (f64, f64), p3: (f64, f64), fill: &str| -> String {
+            format!(
+                r##"<polygon points="{:.1},{:.1} {:.1},{:.1} {:.1},{:.1} {:.1},{:.1}" fill="{}" stroke="{}" stroke-width="1.8" stroke-linejoin="round"/>
+"##,
+                p0.0, p0.1, p1.0, p1.1, p2.0, p2.1, p3.0, p3.1, fill, stroke
+            )
+        };
+
+        let draw_part1 = |x: f64, y: f64| -> String {
+            quad((x, y), (x + chb, y - ch), (x + edge, y), (x + chb, y + ch), col0)
+        };
+
+        let draw_part2 = |x: f64, y: f64| -> String {
+            let mut s = quad((x, y), (x - edge, y), (x - chb, y - ch), (x + chb, y - ch), col1);
+            s.push_str(&quad((x, y), (x + chb, y + ch), (x - chb, y + ch), (x - edge, y), col2));
+            s
+        };
+
+        let draw_cube = |x: f64, y: f64| -> String {
+            let mut s = draw_part1(x, y);
+            s.push_str(&draw_part2(x, y));
+            s
         };
 
         let mut svg = format!(
             r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {size} {size}" width="{size}" height="{size}">
-<rect width="100%" height="100%" fill="#14141e"/>
-<text x="20" y="30" font-family="sans-serif" font-size="16" fill="#e0e0e8" font-weight="bold">Nil Geometry: Penrose Impossible Triangle Closed in H3</text>
-<text x="20" y="52" font-family="sans-serif" font-size="12" fill="#a0a0b0">Non-Commutative Heisenberg Holonomy [X, Y] = Z Closes the Loop (Gap: {:.1})</text>
+<rect width="100%" height="100%" fill="#0c0d14"/>
+<text x="24" y="38" font-family="sans-serif" font-size="16" fill="#ffd700" font-weight="bold">Penrose Impossible Triangle (Reutersvärd Tribar)</text>
+<text x="24" y="60" font-family="sans-serif" font-size="12" fill="#8a8ea8">Physical 3D Closure in Nil Geometry (Heisenberg Group H₃ | Gap: {:.1})</text>
 "##,
             self.nil_gap
         );
 
-        let beam_colors = ["#f0a020", "#30a0e0", "#d03050"];
-        let edge_colors = ["#c08010", "#2080c0", "#a02040"];
-
-        for (idx, quad) in self.beam_vertices.iter().enumerate() {
-            let points: Vec<String> = quad
-                .iter()
-                .map(|&p| {
-                    let (sx, sy) = proj_2d(p);
-                    format!("{:.1},{:.1}", sx, sy)
-                })
-                .collect();
-
-            svg.push_str(&format!(
-                r##"<polygon points="{}" fill="{}" stroke="{}" stroke-width="2.5" opacity="0.92"/>
-"##,
-                points.join(" "),
-                beam_colors[idx % beam_colors.len()],
-                edge_colors[idx % edge_colors.len()]
-            ));
+        // The canonical cyclic Penrose overlap: start drawing from the middle of the bottom arm
+        let mid_idx = (self.cubes_per_edge - 1) / 2;
+        let mut ordered = Vec::new();
+        for i in mid_idx..cubes.len() {
+            ordered.push(cubes[i]);
         }
+        for i in 0..mid_idx {
+            ordered.push(cubes[i]);
+        }
+
+        // Part 1 of base cube
+        svg.push_str(&draw_part1(ordered[0].0, ordered[0].1));
+        // Full cubes along the arms
+        for i in 1..ordered.len() {
+            svg.push_str(&draw_cube(ordered[i].0, ordered[i].1));
+        }
+        // Part 2 of base cube overlapping to complete the impossible cycle
+        svg.push_str(&draw_part2(ordered[0].0, ordered[0].1));
 
         svg.push_str("</svg>\n");
         svg
@@ -1104,15 +1123,15 @@ mod tests {
 
     #[test]
     fn test_penrose_tribar_closure() {
-        let tribar = PenroseTribar::new(4.0, 0.3);
+        let tribar = PenroseTribar::new(7, 36.0);
         // Euclidean gap is non-zero (fails to close in R^3)
         assert!(tribar.euclidean_gap > 1.0);
         // Nil gap is 0 (physically closes in Nil geometry H_3)
         assert_eq!(tribar.nil_gap, 0.0);
 
-        let svg = tribar.to_svg(400);
+        let svg = tribar.to_svg(600);
         assert!(svg.contains("<polygon"));
-        assert!(svg.contains("Penrose Impossible Triangle Closed in H3"));
+        assert!(svg.contains("Reutersvärd Tribar"));
     }
 
     #[test]

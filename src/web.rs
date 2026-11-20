@@ -200,24 +200,83 @@ function drawQuad(pts, fillColor, strokeColor) {
   ctx.stroke();
 }
 
-// Render Penrose Tribar in Nil Space
+// Render Canonical Penrose Tribar (Reutersvärd Impossible Triangle)
 function renderTribar(time) {
-  const L = 3.2;
-  const T = 0.35;
+  const cubesPerEdge = 7;
+  const cubeEdge = 38 * camera.zoom;
+  const triangleEdge = cubeEdge * (cubesPerEdge - 1);
+  const th = triangleEdge * Math.sqrt(3) / 2.0;
+  const ch = cubeEdge * Math.sqrt(3) / 2.0;
+  const chb = cubeEdge / 2.0;
 
-  // Auto-rotation when not dragging
-  if (!isDragging) camera.yaw += 0.005;
+  const cx = canvas.width / 2.0;
+  const cy = canvas.height / 2.0 + th * 0.15;
 
-  const beams = [
-    // Beam 1: Along X
-    { pts: [[0, -T, -T], [L, -T, -T], [L, T, T], [0, T, T]], fill: 'rgba(240, 160, 32, 0.9)', stroke: '#c08010' },
-    // Beam 2: Along Y (sheared along Z by L * y!)
-    { pts: [[L - T, 0, -T], [L - T, L, L * L * 0.5 - T], [L + T, L, L * L * 0.5 + T], [L + T, 0, T]], fill: 'rgba(48, 160, 224, 0.9)', stroke: '#2080c0' },
-    // Beam 3: Returning hypotenuse in Nil contact space (physically closing!)
-    { pts: [[L, L, L * L * 0.5], [0, 0, 0], [-T, T, T], [L - T, L + T, L * L * 0.5 + T]], fill: 'rgba(208, 48, 80, 0.9)', stroke: '#a02040' }
-  ];
+  const va = [cx - triangleEdge / 2.0, cy + th / 3.0]; // bottom-left
+  const vb = [cx + triangleEdge / 2.0, cy + th / 3.0]; // bottom-right
+  const vc = [cx, cy - 2.0 * th / 3.0];                // top
 
-  beams.forEach(b => drawQuad(b.pts, b.fill, b.stroke));
+  const cubes = [];
+  const n = cubesPerEdge - 1;
+
+  // Bottom edge: bottom-left to bottom-right
+  for (let i = 0; i < n; i++) {
+    const t = i / n;
+    cubes.push([va[0] + (vb[0] - va[0]) * t, va[1] + (vb[1] - va[1]) * t]);
+  }
+  // Right edge: bottom-right up to top
+  for (let i = 0; i < n; i++) {
+    const t = i / n;
+    cubes.push([vb[0] + (vc[0] - vb[0]) * t, vb[1] + (vc[1] - vb[1]) * t]);
+  }
+  // Left edge: top down to bottom-left
+  for (let i = 0; i < n; i++) {
+    const t = i / n;
+    cubes.push([vc[0] + (va[0] - vc[0]) * t, vc[1] + (va[1] - vc[1]) * t]);
+  }
+
+  const col0 = '#ffd54f'; // Light top-right face
+  const col1 = '#ffa000'; // Medium top-left face
+  const col2 = '#ff6f00'; // Dark bottom face
+  const stroke = '#1a1200';
+
+  function drawRhombus(p0, p1, p2, p3, fill) {
+    ctx.beginPath();
+    ctx.moveTo(p0[0], p0[1]);
+    ctx.lineTo(p1[0], p1[1]);
+    ctx.lineTo(p2[0], p2[1]);
+    ctx.lineTo(p3[0], p3[1]);
+    ctx.closePath();
+    ctx.fillStyle = fill;
+    ctx.fill();
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = 1.8;
+    ctx.stroke();
+  }
+
+  function drawPart1(x, y) {
+    drawRhombus([x, y], [x + chb, y - ch], [x + cubeEdge, y], [x + chb, y + ch], col0);
+  }
+
+  function drawPart2(x, y) {
+    drawRhombus([x, y], [x - cubeEdge, y], [x - chb, y - ch], [x + chb, y - ch], col1);
+    drawRhombus([x, y], [x + chb, y + ch], [x - chb, y + ch], [x - cubeEdge, y], col2);
+  }
+
+  function drawCube(x, y) {
+    drawPart1(x, y);
+    drawPart2(x, y);
+  }
+
+  // Canonical cyclic overlap: start drawing from the middle of the bottom arm
+  const midIdx = Math.floor((cubesPerEdge - 1) / 2);
+  const ordered = cubes.slice(midIdx).concat(cubes.slice(0, midIdx));
+
+  drawPart1(ordered[0][0], ordered[0][1]);
+  for (let i = 1; i < ordered.length; i++) {
+    drawCube(ordered[i][0], ordered[i][1]);
+  }
+  drawPart2(ordered[0][0], ordered[0][1]);
 }
 
 // Render Escher Staircase

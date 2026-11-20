@@ -251,7 +251,7 @@ impl InteractiveApp {
         let fb = Framebuffer::new(WIDTH, HEIGHT);
         let camera = Camera::new();
         let nil_game = NilGame::new(NilStructure::ns6(), 42);
-        let tribar = PenroseTribar::new(3.5, 0.4);
+        let tribar = PenroseTribar::new(7, 36.0);
         let staircase = NilStaircase::new(4.0, 4);
 
         Ok(Self {
@@ -475,32 +475,62 @@ impl InteractiveApp {
         }
     }
 
-    /// Render 3D Penrose Tribar closing in Nil geometry
+    /// Render canonical Reutersvärd-Penrose impossible triangle
     fn render_penrose_tribar(&mut self) {
-        let w = self.fb.width as f64;
-        let h = self.fb.height as f64;
+        let cx = self.fb.width as f64 * 0.5;
+        let th = self.tribar.triangle_edge * (3.0f64).sqrt() / 2.0;
+        let cy = self.fb.height as f64 * 0.5 + th * 0.15;
 
-        let colors = [0xF0A020, 0x30A0E0, 0xD03050];
+        let cubes = self.tribar.get_cube_positions(cx, cy);
+        let ch = self.tribar.cube_edge * (3.0f64).sqrt() / 2.0;
+        let chb = self.tribar.cube_edge / 2.0;
+        let edge = self.tribar.cube_edge;
 
-        for (idx, quad) in self.tribar.beam_vertices.iter().enumerate() {
-            let p0 = self.camera.project(quad[0], w, h);
-            let p1 = self.camera.project(quad[1], w, h);
-            let p2 = self.camera.project(quad[2], w, h);
-            let p3 = self.camera.project(quad[3], w, h);
+        let col0 = 0xFFD54F; // Light top-right face
+        let col1 = 0xFFA000; // Medium top-left face
+        let col2 = 0xFF6F00; // Dark bottom face
 
-            let color = colors[idx % colors.len()];
-
-            // Draw filled triangles for solid 3D faces
-            self.fb.draw_triangle(p0, p1, p2, color);
-            self.fb.draw_triangle(p0, p2, p3, color);
-
-            // Draw edges
-            let edge_color = 0xFFFFFF;
-            self.fb.draw_line(p0.0 as i32, p0.1 as i32, p0.2 - 0.01, p1.0 as i32, p1.1 as i32, p1.2 - 0.01, edge_color);
-            self.fb.draw_line(p1.0 as i32, p1.1 as i32, p1.2 - 0.01, p2.0 as i32, p2.1 as i32, p2.2 - 0.01, edge_color);
-            self.fb.draw_line(p2.0 as i32, p2.1 as i32, p2.2 - 0.01, p3.0 as i32, p3.1 as i32, p3.2 - 0.01, edge_color);
-            self.fb.draw_line(p3.0 as i32, p3.1 as i32, p3.2 - 0.01, p0.0 as i32, p0.1 as i32, p0.2 - 0.01, edge_color);
+        // Reorder cubes for canonical impossible overlap
+        let mid_idx = (self.tribar.cubes_per_edge - 1) / 2;
+        let mut ordered = Vec::new();
+        for i in mid_idx..cubes.len() {
+            ordered.push(cubes[i]);
         }
+        for i in 0..mid_idx {
+            ordered.push(cubes[i]);
+        }
+
+        let draw_rhombus = |fb: &mut Framebuffer, p0: (f64, f64), p1: (f64, f64), p2: (f64, f64), p3: (f64, f64), color: u32, z: f64| {
+            fb.draw_triangle((p0.0, p0.1, z), (p1.0, p1.1, z), (p2.0, p2.1, z), color);
+            fb.draw_triangle((p0.0, p0.1, z), (p2.0, p2.1, z), (p3.0, p3.1, z), color);
+            let border = 0x1A1200;
+            fb.draw_line(p0.0 as i32, p0.1 as i32, z - 0.01, p1.0 as i32, p1.1 as i32, z - 0.01, border);
+            fb.draw_line(p1.0 as i32, p1.1 as i32, z - 0.01, p2.0 as i32, p2.1 as i32, z - 0.01, border);
+            fb.draw_line(p2.0 as i32, p2.1 as i32, z - 0.01, p3.0 as i32, p3.1 as i32, z - 0.01, border);
+            fb.draw_line(p3.0 as i32, p3.1 as i32, z - 0.01, p0.0 as i32, p0.1 as i32, z - 0.01, border);
+        };
+
+        let draw_part1 = |fb: &mut Framebuffer, x: f64, y: f64, z: f64| {
+            draw_rhombus(fb, (x, y), (x + chb, y - ch), (x + edge, y), (x + chb, y + ch), col0, z);
+        };
+
+        let draw_part2 = |fb: &mut Framebuffer, x: f64, y: f64, z: f64| {
+            draw_rhombus(fb, (x, y), (x - edge, y), (x - chb, y - ch), (x + chb, y - ch), col1, z);
+            draw_rhombus(fb, (x, y), (x + chb, y + ch), (x - chb, y + ch), (x - edge, y), col2, z);
+        };
+
+        // Part 1 of base cube
+        draw_part1(&mut self.fb, ordered[0].0, ordered[0].1, 10.0);
+
+        // Cubes along the arms
+        for i in 1..ordered.len() {
+            let z = 10.0 - (i as f64) * 0.01;
+            draw_part1(&mut self.fb, ordered[i].0, ordered[i].1, z);
+            draw_part2(&mut self.fb, ordered[i].0, ordered[i].1, z);
+        }
+
+        // Part 2 of base cube drawn on top to close the impossible cycle!
+        draw_part2(&mut self.fb, ordered[0].0, ordered[0].1, 0.0);
     }
 
     /// Render 3D Escher ascending staircase with vertical holonomy
@@ -620,20 +650,14 @@ mod tests {
     fn test_interactive_rendering_performance_60fps() {
         // Verify software framebuffer renders a full 800x600 scene in < 16.6ms (>= 60 FPS)
         let mut fb = Framebuffer::new(800, 600);
-        let cam = Camera::new();
-        let tribar = PenroseTribar::new(3.5, 0.4);
+        let tribar = PenroseTribar::new(7, 36.0);
+        let cubes = tribar.get_cube_positions(400.0, 300.0);
 
         let start = Instant::now();
         fb.clear(0x101018);
 
-        for quad in &tribar.beam_vertices {
-            let p0 = cam.project(quad[0], 800.0, 600.0);
-            let p1 = cam.project(quad[1], 800.0, 600.0);
-            let p2 = cam.project(quad[2], 800.0, 600.0);
-            let p3 = cam.project(quad[3], 800.0, 600.0);
-
-            fb.draw_triangle(p0, p1, p2, 0xF0A020);
-            fb.draw_triangle(p0, p2, p3, 0xF0A020);
+        for cube in &cubes {
+            fb.draw_triangle((cube.0, cube.1, 1.0), (cube.0 + 10.0, cube.1, 1.0), (cube.0, cube.1 + 10.0, 1.0), 0xF0A020);
         }
 
         let elapsed = start.elapsed();

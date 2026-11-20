@@ -47,7 +47,7 @@ fn main() {
                 } else {
                     "nil_penrose.svg".to_string()
                 };
-                let tribar = hyperrogue_rs::nil::PenroseTribar::new(4.0, 0.35);
+                let tribar = hyperrogue_rs::nil::PenroseTribar::new(7, 38.0);
                 fs::write(&path, tribar.to_svg(600)).expect("Failed to write Penrose SVG");
                 println!("Nil Penrose Impossible Triangle saved to {}", path);
                 return;
