@@ -64,6 +64,45 @@ fn main() {
                 println!("Nil Ascending Staircase saved to {}", path);
                 return;
             }
+            "--gui" => {
+                use hyperrogue_rs::gui::*;
+                let mut app = InteractiveApp::new(GuiMode::NilWorld).expect("Failed to create GUI window");
+                app.run().expect("GUI error");
+                return;
+            }
+            "--gui-penrose" => {
+                use hyperrogue_rs::gui::*;
+                let mut app = InteractiveApp::new(GuiMode::PenroseTribar).expect("Failed to create GUI window");
+                app.run().expect("GUI error");
+                return;
+            }
+            "--gui-staircase" => {
+                use hyperrogue_rs::gui::*;
+                let mut app = InteractiveApp::new(GuiMode::NilStaircase).expect("Failed to create GUI window");
+                app.run().expect("GUI error");
+                return;
+            }
+            "--web" => {
+                let port = if i + 1 < args.len() && !args[i + 1].starts_with("--") {
+                    i += 1;
+                    args[i].parse().unwrap_or(8080)
+                } else {
+                    8080
+                };
+                hyperrogue_rs::web::WebServer::serve(port).expect("Web server failed");
+                return;
+            }
+            "--html" => {
+                let path = if i + 1 < args.len() && !args[i + 1].starts_with("--") {
+                    i += 1;
+                    args[i].clone()
+                } else {
+                    "nil_interactive.html".to_string()
+                };
+                fs::write(&path, hyperrogue_rs::web::WebServer::html_app()).expect("Failed to write HTML");
+                println!("Interactive 60 FPS HTML5 Canvas app saved to {}", path);
+                return;
+            }
             _ => {}
         }
         i += 1;
