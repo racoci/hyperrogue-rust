@@ -70,11 +70,10 @@ fn main() {
     }
     if run_nil {
         use hyperrogue_rs::nil::*;
-        println!("=== HyperRogue: Nil Geometry (Heisenberg Group) ===");
-        let mut nil_map = NilMap::new(NilStructure::ns6());
-        nil_map.expand(3);
-        println!("Nil Honeycomb: {} cells generated (Structure: {})", nil_map.cell_count(), nil_map.structure.name);
-        println!("Nil Origin at (0, 0, 0)");
+        println!("=== HyperRogue: Nil Geometry (Heisenberg Group H_3) ===");
+        let mut game = NilGame::new(NilStructure::ns6(), seed);
+        println!("Nil Honeycomb: {} cells generated (Structure: {})", game.map.cell_count(), game.map.structure.name);
+        println!("Player starts at Nil origin (0, 0, 0)");
 
         let a = MVec::new(1, 2, 0);
         let b = MVec::new(0, 1, 0);
@@ -88,6 +87,27 @@ fn main() {
         let exp_p = formula_exp(v, NilModel::Heisenberg);
         println!("Nil Geodesic Exponential Map exp(0.5, 0.3, 0.8):");
         println!("  Endpoint: ({:.4}, {:.4}, {:.4})", exp_p.x(), exp_p.y(), exp_p.z());
+
+        // Demonstrate 5-step commutator loop: -X -> -Y -> +X -> +Y -> -Z
+        println!("\nTesting Heisenberg 5-step loop closure (-X -> -Y -> +X -> +Y -> -Z):");
+        let p0 = game.player_mvec();
+        println!("  Initial: ({}, {}, {})", p0.x, p0.y, p0.z);
+        game.step_free(0); // -X
+        println!("  After -X: ({}, {}, {})", game.player_mvec().x, game.player_mvec().y, game.player_mvec().z);
+        game.step_free(1); // -Y
+        println!("  After -Y: ({}, {}, {})", game.player_mvec().x, game.player_mvec().y, game.player_mvec().z);
+        game.step_free(3); // +X
+        println!("  After +X: ({}, {}, {})", game.player_mvec().x, game.player_mvec().y, game.player_mvec().z);
+        game.step_free(4); // +Y
+        println!("  After +Y: ({}, {}, {}) [Climbed vertically by +1 due to [X, Y]=Z]", game.player_mvec().x, game.player_mvec().y, game.player_mvec().z);
+        game.step_free(2); // -Z
+        println!("  After -Z: ({}, {}, {}) [Closed back to initial cell!]", game.player_mvec().x, game.player_mvec().y, game.player_mvec().z);
+        assert_eq!(game.player_mvec(), p0);
+
+        if render_terminal {
+            println!("\nNil 3D Space View (current layer and adjacent Z levels):");
+            println!("{}", game.render_ascii(50, 15));
+        }
         return;
     }
     println!("Starting HyperRogue (Rust Recreation) with seed {}...", seed);

@@ -11,6 +11,8 @@
 
 use crate::math::*;
 use crate::tiling::CellId;
+use crate::content::*;
+use crate::worldgen::*;
 use std::collections::HashMap;
 use std::f64::consts::PI;
 
@@ -739,6 +741,262 @@ impl NilCompass {
 }
 
 // ---------------------------------------------------------------------------
+// Playable 3D Nil Game Engine
+// ---------------------------------------------------------------------------
+
+/// Turn-based game engine running directly inside 3D Nil geometry (Heisenberg group)
+pub struct NilGame {
+    pub map: NilMap,
+    pub board: Vec<BoardCell>,
+    pub rng: WorldRng,
+    pub player_cell: CellId,
+    pub turn_count: i32,
+    pub treasures: i32,
+    pub kills: i32,
+    pub is_dead: bool,
+    pub message_log: Vec<String>,
+}
+
+impl NilGame {
+    pub fn new(structure: NilStructure, seed: u32) -> Self {
+        let mut map = NilMap::new(structure);
+        map.expand(4);
+
+        let mut rng = WorldRng::new(seed);
+        let mut board = Vec::new();
+
+        for i in 0..map.cell_count() {
+            let mut cell = BoardCell::new(i);
+            let m = map.cells[i].mvec;
+
+            if m == MVec::ZERO {
+                cell.land = Land::Crossroads;
+                cell.wall = Wall::None;
+                cell.monster = Monster::Player;
+            } else {
+                cell.land = Land::Crossroads;
+                if rng.chance(0.20) {
+                    cell.wall = Wall::Cavewall;
+                } else {
+                    cell.wall = Wall::None;
+                    if rng.chance(0.06) {
+                        cell.item = Item::Emerald;
+                    } else if rng.chance(0.04) {
+                        cell.monster = Monster::Yeti;
+                    }
+                }
+            }
+            cell.is_generated = true;
+            board.push(cell);
+        }
+
+        Self {
+            map,
+            board,
+            rng,
+            player_cell: 0,
+            turn_count: 0,
+            treasures: 0,
+            kills: 0,
+            is_dead: false,
+            message_log: vec!["Exploring 3D Nil Geometry (Heisenberg Group)!".to_string()],
+        }
+    }
+
+    pub fn player_mvec(&self) -> MVec {
+        self.map.cells[self.player_cell].mvec
+    }
+
+    pub fn log(&mut self, msg: impl Into<String>) {
+        self.message_log.push(msg.into());
+    }
+
+    /// Player takes a step in direction d (0..degree)
+    pub fn step(&mut self, dir: usize) -> bool {
+        if self.is_dead {
+            return false;
+        }
+
+        let target = self.map.create_step(self.player_cell, dir);
+
+        // Ensure board capacity
+        while self.board.len() <= target {
+            let id = self.board.len();
+            let mut c = BoardCell::new(id);
+            c.land = Land::Crossroads;
+            c.wall = Wall::None;
+            self.board.push(c);
+        }
+
+        let target_m = self.board[target].monster;
+        if target_m != Monster::None && !target_m.is_friendly() {
+            // Attack monster!
+            self.board[target].monster = Monster::None;
+            self.kills += 1;
+            self.log(format!("You attacked and defeated the {}!", target_m.info().name));
+        } else if !self.board[target].wall.blocks() {
+            // Move player
+            self.board[self.player_cell].monster = Monster::None;
+            self.player_cell = target;
+            self.board[target].monster = Monster::Player;
+
+            // Pick up item
+            if self.board[target].item != Item::None {
+                let it = self.board[target].item;
+                self.board[target].item = Item::None;
+                self.treasures += 1;
+                self.log(format!("Collected {}!", it.info().name));
+            }
+        } else {
+            self.log("Move is blocked by wall!");
+            return false;
+        }
+
+        self.turn_count += 1;
+        self.monsters_turn();
+        true
+    }
+
+    /// Step directly to neighbor cell without combat or monster turns (for geodesic navigation)
+    pub fn step_free(&mut self, dir: usize) {
+        let target = self.map.create_step(self.player_cell, dir);
+        while self.board.len() <= target {
+            let id = self.board.len();
+            let mut c = BoardCell::new(id);
+            c.land = Land::Crossroads;
+            self.board.push(c);
+        }
+        self.board[self.player_cell].monster = Monster::None;
+        self.player_cell = target;
+        self.board[target].monster = Monster::Player;
+        self.turn_count += 1;
+    }
+
+    pub fn wait(&mut self) {
+        self.turn_count += 1;
+        self.monsters_turn();
+    }
+
+    /// Monster turn in 3D Nil lattice
+    pub fn monsters_turn(&mut self) {
+        let p_pos = self.player_mvec();
+        let deg = self.map.structure.degree();
+
+        for c in 0..self.board.len() {
+            let m = self.board[c].monster;
+            if m != Monster::None && !m.is_friendly() && c != self.player_cell {
+                let c_pos = self.map.cells[c].mvec;
+
+                // Check if adjacent to player
+                let mut adjacent = false;
+                for d in 0..deg {
+                    let n = self.map.create_step(c, d);
+                    if n == self.player_cell {
+                        adjacent = true;
+                        break;
+                    }
+                }
+
+                if adjacent {
+                    self.is_dead = true;
+                    self.log(format!("You were struck down in Nil space by a {}!", m.info().name));
+                    return;
+                }
+
+                // Move closer to player along lattice
+                let mut best = None;
+                let current_d = (c_pos.x - p_pos.x).abs() + (c_pos.y - p_pos.y).abs() + (c_pos.z - p_pos.z).abs();
+                let mut min_d = current_d;
+
+                for d in 0..deg {
+                    let n = self.map.create_step(c, d);
+                    if n < self.board.len() && !self.board[n].wall.blocks() && self.board[n].monster == Monster::None {
+                        let n_pos = self.map.cells[n].mvec;
+                        let d_n = (n_pos.x - p_pos.x).abs() + (n_pos.y - p_pos.y).abs() + (n_pos.z - p_pos.z).abs();
+                        if d_n < min_d {
+                            min_d = d_n;
+                            best = Some(n);
+                        }
+                    }
+                }
+
+                if let Some(target) = best {
+                    self.board[c].monster = Monster::None;
+                    self.board[target].monster = m;
+                }
+            }
+        }
+    }
+
+    /// Render 3D Nil local layer to ASCII terminal
+    pub fn render_ascii(&self, width: usize, height: usize) -> String {
+        let p = self.player_mvec();
+        let mut grid = vec![vec![' '; width]; height];
+
+        let cx = (width as i32) / 2;
+        let cy = (height as i32) / 2;
+
+        for cell in &self.map.cells {
+            let m = cell.mvec;
+            // Draw cells within current and adjacent Z layers
+            if (m.z - p.z).abs() <= 1 {
+                let screen_x = cx + (m.x - p.x) * 3;
+                let screen_y = cy - (m.y - p.y) * 2;
+
+                if screen_x >= 0 && screen_x < width as i32 && screen_y >= 0 && screen_y < height as i32 {
+                    let x = screen_x as usize;
+                    let y = screen_y as usize;
+
+                    let b = if cell.id < self.board.len() {
+                        &self.board[cell.id]
+                    } else {
+                        continue;
+                    };
+
+                    let ch = if cell.id == self.player_cell || b.monster == Monster::Player {
+                        '@'
+                    } else if b.monster != Monster::None {
+                        b.monster.info().glyph
+                    } else if b.item != Item::None {
+                        b.item.info().glyph
+                    } else if b.wall != Wall::None {
+                        b.wall.info().glyph
+                    } else if m.z > p.z {
+                        '^' // Cell above player layer
+                    } else if m.z < p.z {
+                        'v' // Cell below player layer
+                    } else {
+                        '.' // Same layer
+                    };
+
+                    grid[y][x] = ch;
+                }
+            }
+        }
+        // Ensure player character is always visible at screen center
+        if (cx as usize) < width && (cy as usize) < height {
+            grid[cy as usize][cx as usize] = '@';
+        }
+
+        let mut out = format!(
+            "--- Nil 3D Space (Heisenberg) | Pos: ({}, {}, {}) | Tilt: {:.1} | Turn: {} | Treasures: {} | Kills: {} ---\n",
+            p.x, p.y, p.z, p.x as f64, self.turn_count, self.treasures, self.kills
+        );
+
+        for row in grid {
+            out.push_str(&row.into_iter().collect::<String>());
+            out.push('\n');
+        }
+
+        if let Some(msg) = self.message_log.last() {
+            out.push_str(&format!("Msg: {}\n", msg));
+        }
+
+        out
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Tests and Validations
 // ---------------------------------------------------------------------------
 
@@ -860,5 +1118,38 @@ mod tests {
         // Horizontal contact plane tilts by x = 2.0
         assert_eq!(compass.contact_tilt(), 2.0);
         assert_eq!(compass.dir_y.z(), 2.0);
+    }
+
+    #[test]
+    fn test_heisenberg_five_step_closure() {
+        // Matches devmods/tests.cpp:158:
+        // c1 = c->cmove(0)->cmove(1)->cmove(3)->cmove(4)->cmove(2) == c!
+        let mut map = NilMap::new(NilStructure::ns6());
+        map.expand(3);
+
+        for c in 0..map.cell_count() {
+            let c0 = map.create_step(c, 0);  // -X
+            let c1 = map.create_step(c0, 1); // -Y
+            let c2 = map.create_step(c1, 3); // +X
+            let c3 = map.create_step(c2, 4); // +Y
+            let c4 = map.create_step(c3, 2); // -Z
+            assert_eq!(c4, c, "Commutator loop 0->1->3->4->2 must close on cell {}", c);
+        }
+    }
+
+    #[test]
+    fn test_nil_gameplay_turn() {
+        let mut game = NilGame::new(NilStructure::ns6(), 42);
+        assert_eq!(game.player_mvec(), MVec::ZERO);
+
+        // Step in direction 3 (+X)
+        let acted = game.step(3);
+        assert!(acted);
+        assert_eq!(game.turn_count, 1);
+        assert_eq!(game.player_mvec().x, 1);
+
+        let ascii = game.render_ascii(30, 15);
+        assert!(ascii.contains('@'));
+        assert!(ascii.contains("Nil 3D Space"));
     }
 }
