@@ -13,7 +13,7 @@ use std::f64::consts::PI;
 #[test]
 fn test_cpp_cross_val_hyperbolic_constants() {
     // Golden constants computed directly by C++ hyperrogue (geometry.cpp, hyperpoint.cpp)
-    let alpha = TAU / 7.0;
+    let _alpha = TAU / 7.0;
     let beta = TAU / 3.0;
 
     let tessf = edge_of_triangle_with_angles(beta, PI / 7.0, PI / 7.0);
@@ -199,4 +199,49 @@ fn test_cpp_cross_val_simulation_gameplay_flow() {
     // SVG render check
     let svg = Renderer::render_svg(&mut engine, 400);
     assert!(svg.starts_with("<svg"));
+}
+
+#[test]
+fn test_cpp_cross_val_nil_geometry() {
+    use hyperrogue_rs::nil::*;
+
+    // 1. Heisenberg non-commutative multiplication vs C++ golden
+    let a = MVec::new(1, 2, 3);
+    let b = MVec::new(4, 5, 6);
+    assert_eq!(a * b, MVec::new(5, 7, 14));
+    assert_eq!(b * a, MVec::new(5, 7, 17));
+    assert_eq!(a * a.inverse(), MVec::ZERO);
+
+    // 2. Exact exponential map vs C++ formula_exp golden
+    let v = HyperPoint::new(0.5, 0.3, 0.8);
+    let exp_sym = formula_exp(v, NilModel::Symmetric);
+    let exp_heis = formula_exp(v, NilModel::Heisenberg);
+
+    assert!((exp_sym.x() - 0.334612572817389).abs() < 1e-10);
+    assert!((exp_sym.y() - 0.458566840745343).abs() < 1e-10);
+    assert!((exp_sym.z() - 0.821952288354814).abs() < 1e-10);
+
+    assert!((exp_heis.x() - 0.334612572817389).abs() < 1e-10);
+    assert!((exp_heis.y() - 0.458566840745343).abs() < 1e-10);
+    assert!((exp_heis.z() - 0.898673403550085).abs() < 1e-10);
+
+    // 3. Nil distance metric matching hyperpoint.cpp:1341
+    let pt = HyperPoint::new(1.0, 2.0, 3.0);
+    let expected_dist = (1.0f64 + 4.0).sqrt() + (3.0f64 - 1.0 * 2.0 / 2.0).abs(); // sqrt(5) + 2
+    assert!((nil_dist0(pt) - expected_dist).abs() < 1e-12);
+
+    // 4. Honeycomb structures opposite-face involution
+    for structure in [NilStructure::ns6(), NilStructure::ns8(), NilStructure::nshex()] {
+        for d in 0..structure.degree() {
+            let opp = structure.other_side[d];
+            assert_eq!(structure.other_side[opp], d);
+        }
+    }
+
+    // 5. Geodesic interpolation
+    let s0 = HyperPoint::origin();
+    let s1 = HyperPoint::new(1.0, 1.0, 2.0);
+    let start = on_geodesic(s0, s1, 0.0, NilModel::Heisenberg);
+    assert!((start.x() - s0.x()).abs() < 1e-6);
+    assert!((start.y() - s0.y()).abs() < 1e-6);
 }

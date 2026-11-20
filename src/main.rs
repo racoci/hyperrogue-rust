@@ -11,6 +11,7 @@ fn main() {
     let mut steps = 10;
     let mut svg_path = None;
     let mut render_terminal = true;
+    let mut run_nil = false;
 
     let mut i = 1;
     while i < args.len() {
@@ -36,11 +37,35 @@ fn main() {
             "--no-ascii" => {
                 render_terminal = false;
             }
+            "--nil" => {
+                run_nil = true;
+            }
             _ => {}
         }
         i += 1;
     }
+    if run_nil {
+        use hyperrogue_rs::nil::*;
+        println!("=== HyperRogue: Nil Geometry (Heisenberg Group) ===");
+        let mut nil_map = NilMap::new(NilStructure::ns6());
+        nil_map.expand(3);
+        println!("Nil Honeycomb: {} cells generated (Structure: {})", nil_map.cell_count(), nil_map.structure.name);
+        println!("Nil Origin at (0, 0, 0)");
 
+        let a = MVec::new(1, 2, 0);
+        let b = MVec::new(0, 1, 0);
+        let ab = a * b;
+        let ba = b * a;
+        println!("Non-commutative multiplication in Heisenberg group:");
+        println!("  (1, 2, 0) * (0, 1, 0) = ({}, {}, {})", ab.x, ab.y, ab.z);
+        println!("  (0, 1, 0) * (1, 2, 0) = ({}, {}, {})", ba.x, ba.y, ba.z);
+
+        let v = hyperrogue_rs::math::HyperPoint::new(0.5, 0.3, 0.8);
+        let exp_p = formula_exp(v, NilModel::Heisenberg);
+        println!("Nil Geodesic Exponential Map exp(0.5, 0.3, 0.8):");
+        println!("  Endpoint: ({:.4}, {:.4}, {:.4})", exp_p.x(), exp_p.y(), exp_p.z());
+        return;
+    }
     println!("Starting HyperRogue (Rust Recreation) with seed {}...", seed);
     let mut engine = GameEngine::new(seed);
 
