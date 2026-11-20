@@ -241,4 +241,26 @@ fn test_cpp_cross_val_nil_geometry() {
     let start = on_geodesic(s0, s1, 0.0, NilModel::Heisenberg);
     assert!((start.x() - s0.x()).abs() < 1e-6);
     assert!((start.y() - s0.y()).abs() < 1e-6);
+
+    // 6. Korányi gauge norm and Cygan distance
+    let p_zero = HyperPoint::zero();
+    assert_eq!(koranyi_norm(p_zero), 0.0);
+    let p_test = HyperPoint::new(1.0, 1.0, 0.5);
+    let r2 = 2.0;
+    let expected_koranyi = (r2 * r2 + 16.0 * 0.25f64).powf(0.25);
+    assert!((koranyi_norm(p_test) - expected_koranyi).abs() < 1e-12);
+
+    // 7. Nil 5-step loop closure (-X -> -Y -> +X -> +Y -> -Z)
+    // Matches devmods/tests.cpp:158:
+    // c1 = c->cmove(0)->cmove(1)->cmove(3)->cmove(4)->cmove(2) == c
+    let mut nil_map = NilMap::new(NilStructure::ns6());
+    nil_map.expand(3);
+    for c in 0..nil_map.cell_count() {
+        let c0 = nil_map.create_step(c, 0);
+        let c1 = nil_map.create_step(c0, 1);
+        let c2 = nil_map.create_step(c1, 3);
+        let c3 = nil_map.create_step(c2, 4);
+        let c4 = nil_map.create_step(c3, 2);
+        assert_eq!(c4, c, "Commutator loop must close for cell {}", c);
+    }
 }

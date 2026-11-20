@@ -121,6 +121,22 @@ pub fn nil_dist0(h: HyperPoint) -> f64 {
     (h.x().powi(2) + h.y().powi(2)).sqrt() + (h.z() - bz).abs()
 }
 
+/// Cygan / Korányi gauge norm in the Heisenberg group H_3:
+/// N(p) = ((x^2 + y^2)^2 + 16 * z^2)^(1/4)
+#[inline]
+pub fn koranyi_norm(h: HyperPoint) -> f64 {
+    let r2 = h.x().powi(2) + h.y().powi(2);
+    (r2 * r2 + 16.0 * h.z().powi(2)).powf(0.25)
+}
+
+/// Cygan gauge distance between two points in Nil space:
+/// d_cygan(p1, p2) = Korányi(p1^-1 * p2)
+pub fn cygan_distance(p1: HyperPoint, p2: HyperPoint, model: NilModel) -> f64 {
+    let p1_inv = nil_translate(p1 * -1.0, model);
+    let local = p1_inv * p2;
+    koranyi_norm(local)
+}
+
 // ---------------------------------------------------------------------------
 // Analytical Nil Geodesics (Exponential and Logarithmic Maps)
 // ---------------------------------------------------------------------------
