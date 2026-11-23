@@ -402,10 +402,11 @@ pub fn hdist0(h: HyperPoint) -> f64 {
 #[inline]
 pub fn hdist(h1: HyperPoint, h2: HyperPoint) -> f64 {
     let iv = intval(h1, h2);
-    if iv < 0.0 {
+    if iv <= 0.0 {
         0.0
     } else {
-        2.0 * (iv.sqrt() / 2.0).asinh()
+        let half_s = 0.5 * iv.sqrt();
+        2.0 * (half_s + (1.0 + 0.25 * iv).sqrt()).ln()
     }
 }
 
@@ -441,10 +442,10 @@ pub fn mid(h1: HyperPoint, h2: HyperPoint) -> HyperPoint {
 // ---------------------------------------------------------------------------
 
 /// Rotation in coordinates a, b by angle alpha
+#[inline]
 pub fn cspin(a: usize, b: usize, alpha: f64) -> TransMatrix {
     let mut t = ID;
-    let cos_a = alpha.cos();
-    let sin_a = alpha.sin();
+    let (sin_a, cos_a) = alpha.sin_cos();
     t.tab[a][a] = cos_a;
     t.tab[a][b] = sin_a;
     t.tab[b][a] = -sin_a;

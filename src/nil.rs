@@ -114,6 +114,18 @@ pub fn nil_translate(h: HyperPoint, model: NilModel) -> TransMatrix {
     t
 }
 
+/// Exact inverse of nil_translate(h, model), matching nisot::translate(h, -1) in C++
+pub fn nil_translate_inverse(h: HyperPoint, model: NilModel) -> TransMatrix {
+    let mut u = ID;
+    let mu = model.value();
+    u.tab[0][3] = -h.x();
+    u.tab[1][3] = -h.y();
+    u.tab[2][3] = mu * h.x() * h.y() - h.z();
+    u.tab[2][1] = -h.x() * (mu + 1.0) / 2.0;
+    u.tab[2][0] = -h.y() * (mu - 1.0) / 2.0;
+    u
+}
+
 /// Approximate distance from origin in Nil space (Minkowski / sub-Riemannian)
 #[inline]
 pub fn nil_dist0(h: HyperPoint) -> f64 {
@@ -132,8 +144,9 @@ pub fn koranyi_norm(h: HyperPoint) -> f64 {
 /// Cygan gauge distance between two points in Nil space:
 /// d_cygan(p1, p2) = Korányi(p1^-1 * p2)
 pub fn cygan_distance(p1: HyperPoint, p2: HyperPoint, model: NilModel) -> f64 {
-    let p1_inv = nil_translate(p1 * -1.0, model);
-    let local = p1_inv * p2;
+    let p1_4 = HyperPoint::new4(p1.x(), p1.y(), p1.z(), 1.0);
+    let p2_4 = HyperPoint::new4(p2.x(), p2.y(), p2.z(), 1.0);
+    let local = nil_translate_inverse(p1_4, model) * p2_4;
     koranyi_norm(local)
 }
 
@@ -161,14 +174,20 @@ pub fn formula_exp(v: HyperPoint, model: NilModel) -> HyperPoint {
     let w = v.z();
     let c = (v.x().powi(2) + v.y().powi(2)).sqrt() / w;
 
-    let sin_half_w = (w / 2.0).sin();
+    let (sin_half_w, cos_half_w) = (w * 0.5).sin_cos();
+    let (sin_alpha, cos_alpha) = alpha.sin_cos();
+    let cos_sum = cos_half_w * cos_alpha - sin_half_w * sin_alpha;
+    let sin_sum = sin_half_w * cos_alpha + cos_half_w * sin_alpha;
+    let x = 2.0 * c * sin_half_w * cos_sum;
+    let y = 2.0 * c * sin_half_w * sin_sum;
 
-    let x = 2.0 * c * sin_half_w * (w / 2.0 + alpha).cos();
-    let y = 2.0 * c * sin_half_w * (w / 2.0 + alpha).sin();
-
-    let term1 = 1.0 - w.sin() / w;
-    let term2 = (1.0 - w.cos()) / w * (w + 2.0 * alpha).sin();
-    let z = w * (1.0 + (c * c / 2.0) * (term1 + term2));
+    let sin_w = 2.0 * sin_half_w * cos_half_w;
+    let one_minus_cos_w = 2.0 * sin_half_w * sin_half_w;
+    let sin_w_2a = 2.0 * sin_sum * cos_sum;
+    let inv_w = 1.0 / w;
+    let term1 = 1.0 - sin_w * inv_w;
+    let term2 = (one_minus_cos_w * inv_w) * sin_w_2a;
+    let z = w * (1.0 + (c * c * 0.5) * (term1 + term2));
 
     convert_nil(HyperPoint::new4(x, y, z, 1.0), NilModel::Heisenberg, model)
 }
@@ -208,51 +227,46 @@ pub fn get_inverse_exp(h: HyperPoint, model: NilModel) -> HyperPoint {
     };
 
     let s = (2.0 * alpha_total).sin();
-    let max_iter = 50;
+    let b2 = b * b;
+    let heis_z = heis.z();
 
-    for it in 0..=max_iter {
-        let w = (wmin + wmax) / 2.0;
-        let diff_cos = w.cos() - 1.0;
+    for _ in 0..20 {
+        let w = (wmin + wmax) * 0.5;
+        let (sin_w, cos_w) = w.sin_cos();
+        let diff_cos = cos_w - 1.0;
         let geom_factor = if diff_cos.abs() < 1e-12 {
             0.0
         } else {
-            (w.sin() - w) / diff_cos
+            (sin_w - w) / diff_cos
         };
-
-        let z = b * b * (s + geom_factor) + w;
-
-        if it == max_iter {
-            let alpha = alpha_total - w / 2.0;
-            let sin_half_w = (w / 2.0).sin();
-            let c = if sin_half_w.abs() < 1e-12 {
-                0.0
-            } else {
-                b / sin_half_w
-            };
-            return HyperPoint::new(
-                c * w * alpha.cos(),
-                c * w * alpha.sin(),
-                w,
-            );
-        }
-
-        if heis.z() > z {
+        let z = b2 * (s + geom_factor) + w;
+        if heis_z > z {
             wmin = w;
         } else {
             wmax = w;
         }
     }
 
-    HyperPoint::new(heis.x(), heis.y(), heis.z())
+    let w = (wmin + wmax) * 0.5;
+    let alpha = alpha_total - w * 0.5;
+    let sin_half_w = (w * 0.5).sin();
+    let c = if sin_half_w.abs() < 1e-12 {
+        0.0
+    } else {
+        b / sin_half_w
+    };
+    let (sin_a, cos_a) = alpha.sin_cos();
+    HyperPoint::new(c * w * cos_a, c * w * sin_a, w)
 }
 
 /// Point on the geodesic between s0 and s1 at parameter t in [0.0, 1.0]
 pub fn on_geodesic(s0: HyperPoint, s1: HyperPoint, t: f64, model: NilModel) -> HyperPoint {
-    let s0_inv = nil_translate(s0 * -1.0, model);
-    let local = s0_inv * s1;
+    let s0_4 = HyperPoint::new4(s0.x(), s0.y(), s0.z(), 1.0);
+    let s1_4 = HyperPoint::new4(s1.x(), s1.y(), s1.z(), 1.0);
+    let local = nil_translate_inverse(s0_4, model) * s1_4;
     let initial_vel = get_inverse_exp(local, model);
     let local_t = formula_exp(initial_vel * t, model);
-    nil_translate(s0, model) * local_t
+    nil_translate(s0_4, model) * local_t
 }
 
 // ---------------------------------------------------------------------------

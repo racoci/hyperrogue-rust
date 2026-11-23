@@ -19,24 +19,49 @@ impl WorldRng {
         }
     }
 
-    /// Random integer in [0, max_val) matching HyperRogue hrand
+    /// Generate a 31-bit non-negative integer matching HyperRogue hrandpos()
+    #[inline]
+    pub fn hrandpos(&mut self) -> i32 {
+        (self.rng.next_u32() & 0x7FFF_FFFF) as i32
+    }
+
+    /// Random integer in [0, max_val) matching HyperRogue hrand(int i) bit-for-bit
     pub fn hrand(&mut self, max_val: u32) -> u32 {
         if max_val <= 1 {
             return 0;
         }
-        let rand_val = self.rng.next_u32() & 0x7FFF_FFFF;
-        rand_val % max_val
+        let m: u64 = (1u64 << 32) / (max_val as u64);
+        loop {
+            let d = (self.rng.next_u32() as u64) / m;
+            if d < (max_val as u64) {
+                return d as u32;
+            }
+        }
     }
 
-    /// Random float in [0.0, 1.0)
+    /// Random float in [0.0, 1.0) matching HyperRogue hrandf()
+    #[inline]
     pub fn randf(&mut self) -> f64 {
         let val = self.rng.next_u32();
         (val as f64) / (u32::MAX as f64 + 1.0)
     }
 
-    /// Returns true with probability p
-    pub fn chance(&mut self, p: f64) -> bool {
-        self.randf() < p
+    /// Returns true with probability p matching HyperRogue chance(double p) bit-for-bit
+    pub fn chance(&mut self, mut p: f64) -> bool {
+        const SCALE: f64 = (u32::MAX as f64) + 1.0;
+        loop {
+            p *= SCALE;
+            let l = self.rng.next_u32();
+            let pv = p as u32;
+            if l < pv {
+                return true;
+            }
+            if l == pv {
+                p -= pv as f64;
+                continue;
+            }
+            return false;
+        }
     }
 }
 
