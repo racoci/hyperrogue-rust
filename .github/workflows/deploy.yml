@@ -47,7 +47,14 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Run Automated Unit & C++ FFI Cross-Validation Tests
-        run: cargo test --release
+        run: |
+          set -o pipefail
+          if ! cargo test --release -- --nocapture 2>&1 | tee /tmp/test_out.log; then
+            tail -n 40 /tmp/test_out.log | while IFS= read -r line; do
+              echo "::error::${line}"
+            done
+            exit 1
+          fi
 
       - name: Build Interactive 60 FPS Web Bundle
         run: |

@@ -115,6 +115,8 @@ fn main() {
     println!("cargo:rustc-link-lib=dylib=GL");
     println!("cargo:rustc-link-lib=dylib=pthread");
     println!("cargo:rustc-link-lib=dylib=z");
+    println!("cargo:rustc-link-lib=dylib=m");
+    println!("cargo:rustc-link-lib=dylib=dl");
 }
 
 fn build_orig_base(orig_repo: &Path, cache_dir: &Path) {
