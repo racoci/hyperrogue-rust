@@ -16,6 +16,27 @@ fn main() {
     let orig_repo = env::var("HYPERROGUE_ORIG_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(|_| manifest_dir.join("../hyperrogue"));
+    if !orig_repo.exists() {
+        println!(
+            "cargo:warning=../hyperrogue not found; cloning https://github.com/zenorogue/hyperrogue/ into {}",
+            orig_repo.display()
+        );
+        let clone_status = Command::new("git")
+            .args([
+                "clone",
+                "--depth",
+                "1",
+                "https://github.com/zenorogue/hyperrogue/",
+                orig_repo.to_str().unwrap(),
+            ])
+            .status()
+            .expect("Failed to execute git clone for ../hyperrogue");
+        assert!(
+            clone_status.success(),
+            "git clone https://github.com/zenorogue/hyperrogue/ into {} failed",
+            orig_repo.display()
+        );
+    }
     if !orig_repo.join("hyper.cpp").exists() {
         return;
     }
@@ -151,8 +172,10 @@ fn build_orig_base(orig_repo: &Path, cache_dir: &Path) {
 #ifndef KMOD_SCROLL
 #define KMOD_SCROLL 0x0040
 #endif
+#if !SDL_VERSION_ATLEAST(2, 26, 0)
 #define mouseX x
 #define mouseY y
+#endif
 #include "hyper.cpp"
 "#,
     )

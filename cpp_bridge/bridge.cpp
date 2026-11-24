@@ -15,8 +15,10 @@
 #ifndef KMOD_SCROLL
 #define KMOD_SCROLL 0x0040
 #endif
+#if !SDL_VERSION_ATLEAST(2, 26, 0)
 #define mouseX x
 #define mouseY y
+#endif
 
 #include <chrono>
 #include "hyper.h"

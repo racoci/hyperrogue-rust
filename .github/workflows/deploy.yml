@@ -23,13 +23,30 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
+      - name: Clone ../hyperrogue if Not Present
+        run: |
+          if [ ! -d ../hyperrogue ]; then
+            git clone --depth 1 https://github.com/zenorogue/hyperrogue/ ../hyperrogue
+          fi
+
+      - name: Install Native Dependencies for Original HyperRogue FFI
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libsdl2-dev libgl1-mesa-dev zlib1g-dev
+
       - name: Setup Rust Toolchain
         uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Original HyperRogue C++ FFI Object
+        uses: actions/cache@v4
+        with:
+          path: target/orig_cache
+          key: hyper-orig-cache-${{ runner.os }}-${{ hashFiles('build.rs', 'cpp_bridge/bridge.cpp') }}
 
       - name: Cache Cargo Build Artifacts
         uses: Swatinem/rust-cache@v2
 
-      - name: Run Automated Unit & Cross-Validation Tests
+      - name: Run Automated Unit & C++ FFI Cross-Validation Tests
         run: cargo test --release
 
       - name: Build Interactive 60 FPS Web Bundle
