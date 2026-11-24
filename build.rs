@@ -44,6 +44,17 @@ fn main() {
     let cache_dir = manifest_dir.join("target/orig_cache");
     fs::create_dir_all(&cache_dir).expect("Failed to create target/orig_cache");
 
+    // sysconfig.h:598 includes <GL/glu.h> even though HyperRogue calls zero glu* symbols.
+    // Provide an empty fallback stub if libglu1-mesa-dev is absent on the host.
+    if !Path::new("/usr/include/GL/glu.h").exists() {
+        let gl_dir = cache_dir.join("GL");
+        fs::create_dir_all(&gl_dir).unwrap();
+        let glu_stub = gl_dir.join("glu.h");
+        if !glu_stub.exists() {
+            fs::write(&glu_stub, "/* stub for sysconfig.h:598 */\n").unwrap();
+        }
+    }
+
     let autohdr_path = cache_dir.join("autohdr.h");
     let langdata_path = cache_dir.join("language-data.cpp");
     let base_obj_path = cache_dir.join("hyper_orig_base.o");
@@ -189,6 +200,8 @@ fn build_orig_base(orig_repo: &Path, cache_dir: &Path) {
             "-DLINUX",
             "-I/usr/include/SDL2",
             "-I",
+            cache_dir.to_str().unwrap(),
+            "-I",
             orig_repo.to_str().unwrap(),
             "-fPIC",
             "-Wno-invalid-offsetof",
@@ -205,4 +218,5 @@ fn build_orig_base(orig_repo: &Path, cache_dir: &Path) {
 
     fs::copy(work_dir.join("autohdr.h"), cache_dir.join("autohdr.h")).unwrap();
     fs::copy(work_dir.join("language-data.cpp"), cache_dir.join("language-data.cpp")).unwrap();
+    let _ = fs::remove_dir_all(&work_dir);
 }

@@ -32,7 +32,7 @@ jobs:
       - name: Install Native Dependencies for Original HyperRogue FFI
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libsdl2-dev libgl1-mesa-dev zlib1g-dev
+          sudo apt-get install -y --no-install-recommends libsdl2-dev libgl1-mesa-dev libglu1-mesa-dev zlib1g-dev
 
       - name: Setup Rust Toolchain
         uses: dtolnay/rust-toolchain@stable
