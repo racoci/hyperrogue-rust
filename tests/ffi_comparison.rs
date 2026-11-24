@@ -1,3 +1,4 @@
+#![cfg(has_orig_cpp)]
 //! Function-by-Function FFI Parity & Performance Benchmark Suite
 //! Comparing `hyperrogue-rs` directly against the compiled C++ code of the
 //! original `hyperrogue` repository (`../hyperrogue`).

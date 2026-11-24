@@ -9,13 +9,17 @@ use std::process::Command;
 
 fn main() {
     println!("cargo:rerun-if-changed=cpp_bridge/bridge.cpp");
+    println!("cargo:rerun-if-env-changed=HYPERROGUE_ORIG_DIR");
+    println!("cargo:rustc-check-cfg=cfg(has_orig_cpp)");
 
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
-    let orig_repo = manifest_dir.join("../hyperrogue");
-    if !orig_repo.exists() {
+    let orig_repo = env::var("HYPERROGUE_ORIG_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| manifest_dir.join("../hyperrogue"));
+    if !orig_repo.join("hyper.cpp").exists() {
         return;
     }
-
+    println!("cargo:rustc-cfg=has_orig_cpp");
     let cache_dir = manifest_dir.join("target/orig_cache");
     fs::create_dir_all(&cache_dir).expect("Failed to create target/orig_cache");
 

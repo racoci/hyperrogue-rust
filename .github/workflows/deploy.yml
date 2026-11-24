@@ -1,0 +1,62 @@
+name: Deploy HyperRogue Interactive WebApp to GitHub Pages
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: 'pages'
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Rust Toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo Build Artifacts
+        uses: Swatinem/rust-cache@v2
+
+      - name: Run Automated Unit & Cross-Validation Tests
+        run: cargo test --release
+
+      - name: Build Interactive 60 FPS Web Bundle
+        run: |
+          mkdir -p dist
+          cargo run --release -- --html dist/index.html
+          cargo run --release -- --nil-penrose dist/nil_penrose.svg
+          cargo run --release -- --nil-staircase dist/nil_staircase.svg
+          cargo run --release -- --no-ascii --steps 8 --svg dist/hyperbolic_poincare.svg
+          touch dist/.nojekyll
+          test -s dist/index.html
+          test -s dist/nil_penrose.svg
+          test -s dist/nil_staircase.svg
+          test -s dist/hyperbolic_poincare.svg
+
+      - name: Upload GitHub Pages Artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: './dist'
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
