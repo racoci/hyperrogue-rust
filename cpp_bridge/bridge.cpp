@@ -663,6 +663,8 @@ int cpp_living_caves_step(
     const int* neighbor_monst7
 ) {
     ensure_std_hyperbolic();
+    for (auto& am : adj_memo) am.clear();
+    cwt.at = nullptr;
     hrmap_hyperbolic* m = new hrmap_hyperbolic();
     hrmap* old = currentmap;
     currentmap = m;
@@ -680,19 +682,20 @@ int cpp_living_caves_step(
     for (int d = 0; d < 7; d++) {
         cell* n = createMov(center, d);
         n->land = laCaves;
-        n->cpdist = 3;
+        n->cpdist = 99; // Outside gamerange+1 so only center is stepped
         n->wall = (neighbor_wall7[d] == 2) ? waDeadTroll :
                   (neighbor_wall7[d] == 1) ? waCavewall : waCavefloor;
         n->item = (neighbor_item7[d] == 1) ? itGold : itNone;
         n->monst = (neighbor_monst7[d] == 1) ? moZombie : moNone;
-        // Surround neighbors with stone so only center is evaluated cleanly
         dcal.push_back(n);
     }
 
     livecaves();
     int result = (center->wall == waCavewall) ? 1 : 0;
 
+    for (auto& am : adj_memo) am.clear();
     dcal.clear();
+    cwt.at = nullptr;
     currentmap = old;
     delete m;
     return result;
@@ -730,12 +733,16 @@ void cpp_kill_troll_effect(const int* init_neighbor_dead7, int* center_wall_out,
         out_neighbor7[d] = (n->wall == waCavewall) ? 1 : (n->wall == waCavefloor ? 0 : -1);
     }
 
+    for (auto& am : adj_memo) am.clear();
+    cwt.at = nullptr;
     currentmap = old;
     delete m;
 }
 
 double cpp_bench_living_caves_ns(int steps, int* sink) {
     ensure_std_hyperbolic();
+    for (auto& am : adj_memo) am.clear();
+    cwt.at = nullptr;
     hrmap_hyperbolic* m = new hrmap_hyperbolic();
     hrmap* old = currentmap;
     currentmap = m;
@@ -778,7 +785,9 @@ double cpp_bench_living_caves_ns(int steps, int* sink) {
     for (cell* c : dcal) if (c->wall == waCavewall) wall_cnt++;
     *sink = wall_cnt;
 
+    for (auto& am : adj_memo) am.clear();
     dcal.clear();
+    cwt.at = nullptr;
     currentmap = old;
     delete m;
     return std::chrono::duration<double, std::nano>(t1 - t0).count();

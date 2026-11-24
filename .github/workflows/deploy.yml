@@ -41,7 +41,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: target/orig_cache
-          key: hyper-orig-cache-${{ runner.os }}-${{ hashFiles('build.rs', 'cpp_bridge/bridge.cpp') }}
+          key: hyper-orig-cache-${{ runner.os }}-${{ hashFiles('build.rs') }}
 
       - name: Cache Cargo Build Artifacts
         uses: Swatinem/rust-cache@v2
